@@ -1,16 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VideoLibrary;
 using System.Net;
-using System.Net.Http;
-using System.Diagnostics;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
-
 
 namespace YouTube_Downloader
 {
@@ -41,43 +34,42 @@ namespace YouTube_Downloader
         {
             string IdOfUploadedPlayList = getIdOfUploadedPlayList(channelId);
 
-            var req = WebRequest.Create(@"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=" + IdOfUploadedPlayList + "&maxResults=50&key=" + ApiKey.apiKey);
-            var res = req.GetResponse();
-            PlayListJson info;
-            using (res)
+            string request = @"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=" + IdOfUploadedPlayList + "&maxResults=50&key=" + ApiKey.apiKey;
+            var jsonResult = getJsonRequest<PlayListJson>(request);
+
+            var result = new Dictionary<string, string>();
+
+            foreach (var item in jsonResult.items)
             {
-                using (var resStream = res.GetResponseStream())
-                {
-                    var serializer = new DataContractJsonSerializer(typeof(PlayListJson));
-                    info = (PlayListJson)serializer.ReadObject(resStream);
-
-                    var result = new Dictionary<string, string>();
-
-                    foreach (var item in info.items)
-                    {
-                        result.Add(@"https://www.youtube.com/watch?v=" + item.snippet.resourceId.videoId, item.snippet.title);
-                    }
-
-                    return result;
-                }
+                result.Add(@"https://www.youtube.com/watch?v=" + item.snippet.resourceId.videoId, item.snippet.title);
             }
+
+            return result;
         }
 
         private static string getIdOfUploadedPlayList(string channelId)
         {
-            var req = WebRequest.Create(@"https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=" + channelId + "&key=" + ApiKey.apiKey);
+            string request = @"https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=" + channelId + "&key=" + ApiKey.apiKey;
+            var jsonResult = getJsonRequest<ChannelJson>(request);
+
+            return jsonResult.items[0].contentDetails.relatedPlaylists.uploads;
+        }
+
+        private static T getJsonRequest<T>(string request)
+        {
+            var req = WebRequest.Create(request);
             var res = req.GetResponse();
-            ChannelJson info;
+            T result;
             using (res)
             {
                 using (var resStream = res.GetResponseStream())
                 {
-                    var serializer = new DataContractJsonSerializer(typeof(ChannelJson));
-                    info = (ChannelJson)serializer.ReadObject(resStream);
+                    var serializer = new DataContractJsonSerializer(typeof(T));
+                    result = (T)serializer.ReadObject(resStream);
                 }
             }
 
-            return info.items[0].contentDetails.relatedPlaylists.uploads;
+            return result;
         }
     }
 
@@ -108,7 +100,6 @@ namespace YouTube_Downloader
             public string uploads { get; set; }
         }
     }
-
 
     [DataContract]
     public class PlayListJson
