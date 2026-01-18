@@ -1,15 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <RuntimeIdentifiers>osx.11.0-x64</RuntimeIdentifiers>
     <PublishSingleFile>true</PublishSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="VideoLibrary.Compat" Version="3.1.0" />
+    <PackageReference Include="VideoLibrary.Compat" Version="3.3.0" />
   </ItemGroup>
 
 </Project>
