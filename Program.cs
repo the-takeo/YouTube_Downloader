@@ -1,5 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
 using VideoLibrary;
 using System.Net;
 using System.Runtime.Serialization;
@@ -11,12 +15,101 @@ namespace YouTube_Downloader
     {
         static void Main(string[] args)
         {
-            string channelId = args[0];
-            string downloadPath = args[1];
-
-            foreach (var url in YouTubeProcess.GetMovieUrlsOfChannel(channelId))
+            // CLI モード: チャンネルIDとダウンロードパスの2引数
+            if (args.Length == 2
+                && !args[0].StartsWith("chrome-extension://")
+                && args[0] != "--native-messaging")
             {
-                YouTubeProcess.Download(url.Key, downloadPath);
+                string channelId = args[0];
+                string downloadPath = args[1];
+                foreach (var url in YouTubeProcess.GetMovieUrlsOfChannel(channelId))
+                {
+                    YouTubeProcess.Download(url.Key, downloadPath);
+                }
+                return;
+            }
+
+            // それ以外はネイティブメッセージングモード
+            // （引数なし、--native-messaging、またはChromeが渡すchrome-extension://...）
+            NativeMessagingHost.Run();
+        }
+    }
+
+    public static class NativeMessagingHost
+    {
+        public static void Run()
+        {
+            var stdin = Console.OpenStandardInput();
+            var stdout = Console.OpenStandardOutput();
+
+            while (true)
+            {
+                var lenBuf = new byte[4];
+                if (stdin.Read(lenBuf, 0, 4) < 4) break;
+
+                int len = BitConverter.ToInt32(lenBuf, 0);
+                var msgBuf = new byte[len];
+                int totalRead = 0;
+                while (totalRead < len)
+                    totalRead += stdin.Read(msgBuf, totalRead, len - totalRead);
+
+                var json = Encoding.UTF8.GetString(msgBuf);
+                using var doc = JsonDocument.Parse(json);
+                ProcessRequest(doc.RootElement, stdout);
+            }
+        }
+
+        static void Send(Stream stdout, object obj)
+        {
+            var json = JsonSerializer.Serialize(obj);
+            var bytes = Encoding.UTF8.GetBytes(json);
+            var lenBytes = BitConverter.GetBytes(bytes.Length);
+            lock (stdout)
+            {
+                stdout.Write(lenBytes, 0, 4);
+                stdout.Write(bytes, 0, bytes.Length);
+                stdout.Flush();
+            }
+        }
+
+        static void ProcessRequest(JsonElement req, Stream stdout)
+        {
+            try
+            {
+                var path = req.GetProperty("path").GetString();
+                var urls = req.GetProperty("urls")
+                              .EnumerateArray()
+                              .Select(u => u.GetString())
+                              .ToList();
+
+                int total = urls.Count;
+                int downloaded = 0;
+                int failed = 0;
+
+                foreach (var url in urls)
+                {
+                    string title = url;
+                    try
+                    {
+                        var youTube = YouTube.Default;
+                        var video = youTube.GetVideo(url);
+                        title = video.FullName;
+                        File.WriteAllBytes(Path.Combine(path, video.FullName), video.GetBytes());
+                        downloaded++;
+                    }
+                    catch
+                    {
+                        failed++;
+                    }
+
+                    Send(stdout, new { type = "progress", current = downloaded + failed, total, title });
+                }
+
+                Send(stdout, new { type = "complete", downloaded, failed, total });
+            }
+            catch (Exception ex)
+            {
+                Send(stdout, new { type = "error", message = ex.Message });
             }
         }
     }
