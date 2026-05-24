@@ -34,15 +34,24 @@ namespace YouTube_Downloader
         {
             string IdOfUploadedPlayList = getIdOfUploadedPlayList(channelId);
 
-            string request = @"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=" + IdOfUploadedPlayList + "&maxResults=50&key=" + ApiKey.apiKey;
-            var jsonResult = getJsonRequest<PlayListJson>(request);
-
             var result = new Dictionary<string, string>();
+            string nextPageToken = null;
 
-            foreach (var item in jsonResult.items)
+            do
             {
-                result.Add(@"https://www.youtube.com/watch?v=" + item.snippet.resourceId.videoId, item.snippet.title);
-            }
+                string request = @"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=" + IdOfUploadedPlayList + "&maxResults=50&key=" + ApiKey.apiKey;
+                if (nextPageToken != null)
+                    request += "&pageToken=" + nextPageToken;
+
+                var jsonResult = getJsonRequest<PlayListJson>(request);
+
+                foreach (var item in jsonResult.items)
+                {
+                    result.Add(@"https://www.youtube.com/watch?v=" + item.snippet.resourceId.videoId, item.snippet.title);
+                }
+
+                nextPageToken = jsonResult.nextPageToken;
+            } while (nextPageToken != null);
 
             return result;
         }
@@ -106,6 +115,9 @@ namespace YouTube_Downloader
     {
         [DataMember]
         public List<item> items { get; set; }
+
+        [DataMember]
+        public string nextPageToken { get; set; }
 
         [DataContract]
         public class item
