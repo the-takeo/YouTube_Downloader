@@ -41,6 +41,7 @@ namespace YouTube_Downloader
         {
             var stdin = Console.OpenStandardInput();
             var stdout = Console.OpenStandardOutput();
+            var cancelSource = new System.Threading.CancellationTokenSource();
 
             while (true)
             {
@@ -54,8 +55,36 @@ namespace YouTube_Downloader
                     totalRead += stdin.Read(msgBuf, totalRead, len - totalRead);
 
                 var json = Encoding.UTF8.GetString(msgBuf);
-                using var doc = JsonDocument.Parse(json);
-                ProcessRequest(doc.RootElement, stdout);
+                string type;
+                string path = null;
+                List<string> urls = null;
+
+                using (var doc = JsonDocument.Parse(json))
+                {
+                    var root = doc.RootElement;
+                    type = root.TryGetProperty("type", out var t) ? t.GetString() : "download";
+
+                    if (type == "download")
+                    {
+                        path = root.GetProperty("path").GetString();
+                        urls = root.GetProperty("urls")
+                                   .EnumerateArray()
+                                   .Select(u => u.GetString())
+                                   .ToList();
+                    }
+                }
+
+                if (type == "cancel")
+                {
+                    cancelSource.Cancel();
+                    continue;
+                }
+
+                // 新しいダウンロード要求。実行中のダウンロードは背景スレッドで動かし、
+                // メインループはstdinの読み取り（＝キャンセル要求の受信）を継続できるようにする。
+                cancelSource = new System.Threading.CancellationTokenSource();
+                var token = cancelSource.Token;
+                System.Threading.Tasks.Task.Run(() => ProcessDownload(urls, path, stdout, token));
             }
         }
 
@@ -72,22 +101,22 @@ namespace YouTube_Downloader
             }
         }
 
-        static void ProcessRequest(JsonElement req, Stream stdout)
+        static void ProcessDownload(List<string> urls, string path, Stream stdout, System.Threading.CancellationToken token)
         {
             try
             {
-                var path = req.GetProperty("path").GetString();
-                var urls = req.GetProperty("urls")
-                              .EnumerateArray()
-                              .Select(u => u.GetString())
-                              .ToList();
-
                 int total = urls.Count;
                 int downloaded = 0;
                 int failed = 0;
 
                 foreach (var url in urls)
                 {
+                    if (token.IsCancellationRequested)
+                    {
+                        Send(stdout, new { type = "cancelled", downloaded, failed, total });
+                        return;
+                    }
+
                     string title = url;
                     try
                     {

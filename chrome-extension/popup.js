@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
   document.getElementById('download-btn').addEventListener('click', onDownloadClick);
+  document.getElementById('cancel-btn').addEventListener('click', onCancelClick);
+  chrome.runtime.onMessage.addListener(handleProgress);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let url;
@@ -27,6 +29,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await resolvePageInfo(parsed, stored.apiKey);
+
+  // 既に進行中のダウンロードがあれば（ポップアップを閉じて再度開いた場合など）、
+  // 状態をバックグラウンドから復元してUIに反映する。
+  const status = await chrome.runtime.sendMessage({ action: 'getStatus' });
+  if (status?.active) {
+    document.getElementById('download-btn').disabled = true;
+    showCancelButton();
+    updateProgressUi(status.current, status.total, status.title);
+  }
 });
 
 function parseYouTubeUrl(url) {
@@ -151,8 +162,32 @@ async function onDownloadClick() {
     setStatus(`${urls.length}件の動画をダウンロードします...`);
   }
 
-  chrome.runtime.onMessage.addListener(handleProgress);
+  showCancelButton();
   chrome.runtime.sendMessage({ action: 'startDownload', urls, path });
+}
+
+async function onCancelClick() {
+  document.getElementById('cancel-btn').disabled = true;
+  setStatus('キャンセルしています...');
+  await chrome.runtime.sendMessage({ action: 'cancelDownload' });
+}
+
+function showCancelButton() {
+  const btn = document.getElementById('cancel-btn');
+  btn.style.display = 'block';
+  btn.disabled = false;
+}
+
+function hideCancelButton() {
+  document.getElementById('cancel-btn').style.display = 'none';
+}
+
+function updateProgressUi(current, total, title) {
+  const pct = total ? Math.round((current / total) * 100) : 0;
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('progress-fill').style.width = pct + '%';
+  const label = title ? `「${title}」` : '';
+  setStatus(`(${current}/${total}) ${label} ダウンロード中...`);
 }
 
 async function fetchVideoUrls(info, apiKey, count) {
@@ -190,21 +225,22 @@ async function fetchVideoUrls(info, apiKey, count) {
 
 function handleProgress(message) {
   if (message.action === 'progress') {
-    const pct = Math.round((message.current / message.total) * 100);
-    document.getElementById('progress-wrap').style.display = 'block';
-    document.getElementById('progress-fill').style.width = pct + '%';
-    const title = message.title ? `「${message.title}」` : '';
-    setStatus(`(${message.current}/${message.total}) ${title} ダウンロード中...`);
+    updateProgressUi(message.current, message.total, message.title);
   } else if (message.action === 'complete') {
     document.getElementById('progress-fill').style.width = '100%';
     const failNote = message.failed > 0 ? `（失敗 ${message.failed}件）` : '';
     setStatus(`完了！ ${message.downloaded}件ダウンロードしました${failNote}`, false, true);
     document.getElementById('download-btn').disabled = false;
-    chrome.runtime.onMessage.removeListener(handleProgress);
+    hideCancelButton();
+  } else if (message.action === 'cancelled') {
+    const note = message.downloaded > 0 ? `（${message.downloaded}件ダウンロード済み）` : '';
+    setStatus(`キャンセルしました${note}`);
+    document.getElementById('download-btn').disabled = false;
+    hideCancelButton();
   } else if (message.action === 'downloadError') {
     setStatus(`エラー: ${message.error}`, true);
     document.getElementById('download-btn').disabled = false;
-    chrome.runtime.onMessage.removeListener(handleProgress);
+    hideCancelButton();
   }
 }
 
