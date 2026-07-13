@@ -124,6 +124,20 @@
       cursor: pointer;
     }
     button.secondary:hover { background: #444; }
+    #cancel-btn {
+      display: none;
+      width: 100%;
+      padding: 7px;
+      margin-top: 8px;
+      background: #fff;
+      color: #c00;
+      border: 1px solid #c00;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #cancel-btn:hover:not(:disabled) { background: #fdecec; }
+    #cancel-btn:disabled { color: #bbb; border-color: #bbb; cursor: not-allowed; }
     #not-supported {
       font-size: 13px;
       color: #c00;
@@ -158,6 +172,7 @@
     <div class="progress-wrap" id="progress-wrap">
       <div id="progress-fill"></div>
     </div>
+    <button id="cancel-btn">キャンセル</button>
   </div>
 
   <details>

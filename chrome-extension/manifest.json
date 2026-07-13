@@ -3,7 +3,7 @@
   "name": "YouTube Downloader",
   "version": "1.0",
   "description": "YouTubeチャンネル・再生リストの動画をダウンロードします",
-  "permissions": ["activeTab", "nativeMessaging", "storage"],
+  "permissions": ["activeTab", "nativeMessaging", "storage", "alarms"],
   "host_permissions": [
     "https://www.googleapis.com/*"
   ],
