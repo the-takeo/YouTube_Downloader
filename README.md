@@ -17,7 +17,17 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 
 ## ビルド
 
-1. リポジトリ直下に `ApiKey.cs` を作成し、API キーを記入します（`.gitignore` 済みなのでコミットされません）。
+1. .NET 9 SDK をインストールします（インストール済みならスキップ）。PowerShell で次を実行します。
+
+   ```powershell
+   winget install --id Microsoft.DotNet.SDK.9 -e
+   ```
+
+   インストール後は **ターミナルを開き直して** ください（開き直さないと `dotnet` が認識されません）。`dotnet --list-sdks` で `9.x.x` が表示されれば準備完了です。
+
+   > `dotnet : 用語 'dotnet' は、コマンドレット、関数、…として認識されません` と表示される場合は、SDK が未インストールか、インストール後にターミナルを開き直していません。
+
+2. リポジトリ直下に `ApiKey.cs` を作成し、API キーを記入します（`.gitignore` 済みなのでコミットされません）。
 
    ```csharp
    namespace YouTube_Downloader
@@ -31,9 +41,9 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 
    > このファイルはビルドに必須です。Chrome 拡張機能だけを使う場合も作成してください（拡張機能側は、ポップアップで設定した API キーを使用します）。
 
-2. ビルドします。
+3. リポジトリのフォルダで、PowerShell から次を実行してビルドします。
 
-   ```bash
+   ```powershell
    dotnet build
    ```
 
@@ -41,14 +51,14 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 
 ## 使い方 1: コマンドライン
 
-```bash
-YouTube_Downloader.exe <チャンネルID> <保存先フォルダ>
+```powershell
+.\bin\Debug\net9.0\win-x64\YouTube_Downloader.exe <チャンネルID> <保存先フォルダ>
 ```
 
 例:
 
-```bash
-YouTube_Downloader.exe UCxxxxxxxxxxxxxxxxxxxxxx C:\Users\me\Videos
+```powershell
+.\bin\Debug\net9.0\win-x64\YouTube_Downloader.exe UCxxxxxxxxxxxxxxxxxxxxxx C:\Users\me\Videos
 ```
 
 - チャンネルにアップロードされた全動画（50 件を超える場合もすべて）を、保存先フォルダにダウンロードします。
