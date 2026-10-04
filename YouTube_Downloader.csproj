@@ -7,8 +7,4 @@
     <PublishSingleFile>true</PublishSingleFile>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="VideoLibrary.Compat" Version="3.3.0" />
-  </ItemGroup>
-
 </Project>

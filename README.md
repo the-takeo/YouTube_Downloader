@@ -12,6 +12,7 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 
 - Windows (x64)
 - [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) と [FFmpeg](https://ffmpeg.org/)（実際のダウンロードと、映像・音声の結合に使用）
 - YouTube Data API v3 の API キー（[Google Cloud Console](https://console.cloud.google.com/) で「YouTube Data API v3」を有効にして発行）
 - Google Chrome（拡張機能を使う場合）
 
@@ -27,7 +28,21 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 
    > `dotnet : 用語 'dotnet' は、コマンドレット、関数、…として認識されません` と表示される場合は、SDK が未インストールか、インストール後にターミナルを開き直していません。
 
-2. リポジトリ直下に `ApiKey.cs` を作成し、API キーを記入します（`.gitignore` 済みなのでコミットされません）。
+2. yt-dlp と FFmpeg をインストールします。
+
+   ```powershell
+   winget install --id yt-dlp.yt-dlp -e
+   ```
+
+   ```powershell
+   winget install --id Gyan.FFmpeg -e
+   ```
+
+   インストール後は **ターミナルと Chrome を開き直して** ください（PATH が反映されます）。`yt-dlp --version` と `ffmpeg -version` が表示されれば準備完了です。
+
+   > winget を使わない場合は、`yt-dlp.exe` と `ffmpeg.exe` をダウンロードして `YouTube_Downloader.exe` と同じフォルダに置いても動作します。
+
+3. リポジトリ直下に `ApiKey.cs` を作成し、API キーを記入します（`.gitignore` 済みなのでコミットされません）。
 
    ```csharp
    namespace YouTube_Downloader
@@ -41,7 +56,7 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 
    > このファイルはビルドに必須です。Chrome 拡張機能だけを使う場合も作成してください（拡張機能側は、ポップアップで設定した API キーを使用します）。
 
-3. リポジトリのフォルダで、PowerShell から次を実行してビルドします。
+4. リポジトリのフォルダで、PowerShell から次を実行してビルドします。
 
    ```powershell
    dotnet build
@@ -62,6 +77,7 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 ```
 
 - チャンネルにアップロードされた全動画（50 件を超える場合もすべて）を、保存先フォルダにダウンロードします。
+- 動画は利用可能な最高画質（4K・60fps など）でダウンロードし、MP4 で保存します。
 - チャンネル ID は `UC` で始まる文字列です。調べ方は[こちら](https://reposub.jp/blogs/tips/youtube_channel_id)を参照してください。
 - 引数が 2 つでない場合はネイティブメッセージングモード（Chrome 拡張機能用）で起動するため、CLI として使うときは必ず 2 つ指定してください。
 
@@ -109,6 +125,7 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 - ダウンロードはバックグラウンドで続行されるため、**ポップアップを閉じても中断されません**。再度開くと進捗が表示されます。
 - **キャンセル** ボタンで中止できます（ダウンロード中の動画が終わった時点で停止します）。
 - 完了すると成功件数と失敗件数が表示されます。
+- 動画は利用可能な最高画質（4K・60fps など）でダウンロードし、MP4 で保存します。
 
 > API キーが未設定でも、動画ページからの単体ダウンロードは可能です。再生リスト・チャンネルのダウンロードや、`@ハンドル` / `/c/` 形式の URL の解決には API キーが必要です。
 
@@ -120,6 +137,8 @@ Chrome 拡張機能は、同じ実行ファイル (`YouTube_Downloader.exe`) を
 | 「Access to the specified native messaging host is forbidden」 | 拡張機能を読み込み直すなどで ID が変わっています。新しい ID で `register-host.ps1` を再実行してください。 |
 | 「Native host has exited」 | EXE を移動・削除していないか確認してください。移動した場合は `-ExePath` を付けて再登録します。 |
 | 「YouTubeのチャンネルまたは再生リストのページで開いてください」 | 対応していないページです。上の表の URL 形式のページで開いてください。 |
+| 「yt-dlp.exe が見つかりません」 | yt-dlp をインストールし、Chrome（CLI の場合はターミナル）を開き直してください。`yt-dlp.exe` を `YouTube_Downloader.exe` と同じフォルダに置いても構いません。 |
+| 急にすべての動画が失敗するようになった | YouTube 側の仕様変更の可能性があります。`winget upgrade --id yt-dlp.yt-dlp -e`（winget 以外で入れた場合は `yt-dlp -U`）で yt-dlp を最新版に更新してください。 |
 | 一部の動画が失敗する | 年齢制限・メンバー限定・ライブ配信など、取得できない動画はスキップされ失敗件数に数えられます。 |
 
 ## ライセンス
