@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using VideoLibrary;
 using System.Net;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
@@ -22,6 +22,11 @@ namespace YouTube_Downloader
             {
                 string channelId = args[0];
                 string downloadPath = args[1];
+                if (YouTubeProcess.FindYtDlp() == null)
+                {
+                    Console.Error.WriteLine(YouTubeProcess.YtDlpNotFoundMessage);
+                    Environment.Exit(1);
+                }
                 foreach (var url in YouTubeProcess.GetMovieUrlsOfChannel(channelId))
                 {
                     YouTubeProcess.Download(url.Key, downloadPath);
@@ -109,6 +114,12 @@ namespace YouTube_Downloader
                 int downloaded = 0;
                 int failed = 0;
 
+                if (YouTubeProcess.FindYtDlp() == null)
+                {
+                    Send(stdout, new { type = "error", message = YouTubeProcess.YtDlpNotFoundMessage });
+                    return;
+                }
+
                 foreach (var url in urls)
                 {
                     if (token.IsCancellationRequested)
@@ -120,10 +131,7 @@ namespace YouTube_Downloader
                     string title = url;
                     try
                     {
-                        var youTube = YouTube.Default;
-                        var video = youTube.GetVideo(url);
-                        title = video.FullName;
-                        File.WriteAllBytes(Path.Combine(path, video.FullName), video.GetBytes());
+                        title = YouTubeProcess.Download(url, path);
                         downloaded++;
                     }
                     catch
@@ -145,11 +153,77 @@ namespace YouTube_Downloader
 
     public static class YouTubeProcess
     {
-        public static void Download(string url, string path)
+        public const string YtDlpNotFoundMessage =
+            "yt-dlp.exe が見つかりません。YouTube_Downloader.exe と同じフォルダに置くか、PATH に追加してください。";
+
+        // yt-dlp で最高画質の映像と最高音質の音声を取得し、ffmpeg で MP4 に結合する。
+        // 保存したファイル名を返す。
+        public static string Download(string url, string path)
         {
-            var youTube = YouTube.Default;
-            var video = youTube.GetVideo(url);
-            File.WriteAllBytes(path + @"\" + video.FullName, video.GetBytes());
+            string ytDlp = FindYtDlp() ?? throw new FileNotFoundException(YtDlpNotFoundMessage);
+
+            var args = new List<string>
+            {
+                "--no-playlist", "--no-progress", "--encoding", "utf-8",
+                "-f", "bv*+ba/b", "--merge-output-format", "mp4",
+                "-o", Path.Combine(path, "%(title)s.%(ext)s"),
+                "--print", "after_move:filepath", "--no-simulate",
+            };
+            string ffmpeg = FindTool("ffmpeg.exe");
+            if (ffmpeg != null)
+                args.AddRange(new[] { "--ffmpeg-location", ffmpeg });
+            args.Add(url);
+
+            var psi = new ProcessStartInfo(ytDlp)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                // ネイティブメッセージングでは標準入力が Chrome とのパイプなので、子プロセスに継承させない
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+            };
+            foreach (var arg in args)
+                psi.ArgumentList.Add(arg);
+
+            using (var proc = Process.Start(psi))
+            {
+                proc.StandardInput.Close();
+                // 両方を並行して読まないとバッファが詰まってハングする
+                var errTask = proc.StandardError.ReadToEndAsync();
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit();
+                string err = errTask.Result;
+
+                if (proc.ExitCode != 0)
+                    throw new Exception("yt-dlp でのダウンロードに失敗しました: " + err.Trim());
+
+                string filePath = output.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l != "");
+                return filePath != null ? Path.GetFileName(filePath) : url;
+            }
+        }
+
+        public static string FindYtDlp() => FindTool("yt-dlp.exe");
+
+        // EXE と同じフォルダ、または PATH 上から探す
+        private static string FindTool(string fileName)
+        {
+            var dirs = new List<string> { AppContext.BaseDirectory };
+            dirs.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "")
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+
+            foreach (var dir in dirs)
+            {
+                try
+                {
+                    string candidate = Path.Combine(dir.Trim('"'), fileName);
+                    if (File.Exists(candidate)) return candidate;
+                }
+                catch { }
+            }
+            return null;
         }
 
         public static Dictionary<string, string> GetMovieUrlsOfChannel(string channelId)
